@@ -24,14 +24,11 @@ defmodule HttpHeader do
     [name, value] =
       header
       |> String.split(":")
+      |> Enum.map(&String.trim/1)
 
     %__MODULE__{
-      name:
-        name
-        |> String.trim(),
-      value:
-        value
-        |> String.trim()
+      name: name,
+      value: value
     }
   end
 
@@ -90,11 +87,40 @@ defmodule HttpRequest do
     headers = headers |> Enum.map(&HttpHeader.to_string/1) |> Enum.join("\r\n")
     "#{method} #{path} #{version}\r\n#{headers}\r\n\r\n#{body}"
   end
-end
 
-defmodule HttpParser do
-  @spec parse_request(String.t()) :: HttpRequest.t()
-  def parse_request(request) do
+  @spec split_request(String.t()) :: [String.t()]
+  defp split_request(request) do
+    case String.split(request, "\r\n\r\n", parts: 2) do
+      [head, body] ->
+        [head, body]
+
+      [head] ->
+        [head, ""]
+
+      [] ->
+        ["", ""]
+    end
+    |> Enum.map(&String.trim/1)
+  end
+
+  @spec split_head(String.t()) :: [String.t()]
+  defp split_head(head) do
+    head
+    |> String.split("\r\n")
+    |> Enum.at(0)
+    |> String.split(" ")
+  end
+
+  @spec parse_headers(String.t()) :: [HttpHeader.t()]
+  defp parse_headers(head) do
+    head
+    |> String.split("\r\n")
+    |> Enum.drop(1)
+    |> Enum.map(&HttpHeader.parse/1)
+  end
+
+  @spec parse(String.t()) :: t
+  def parse(request) do
     [head, body] =
       request
       |> split_request
@@ -107,36 +133,15 @@ defmodule HttpParser do
       head
       |> parse_headers
 
-    HttpRequest.new(method, path, version, headers, body)
-  end
-
-  @spec split_request(String.t()) :: [String.t()]
-  def split_request(request) do
-    case String.split(request, "\r\n\r\n", parts: 2) do
-      [head, body] ->
-        [String.trim(head), String.trim(body)]
-
-      [head] ->
-        [String.trim(head), ""]
-
-      [] ->
-        ["", ""]
-    end
-  end
-
-  @spec split_head(String.t()) :: [String.t()]
-  def split_head(head) do
-    head
-    |> String.split("\r\n")
-    |> Enum.at(0)
-    |> String.split(" ")
-  end
-
-  @spec parse_headers(String.t()) :: [HttpHeader.t()]
-  def parse_headers(head) do
-    head
-    |> String.split("\r\n")
-    |> Enum.drop(1)
-    |> Enum.map(&HttpHeader.parse/1)
+    new(method, path, version, headers, body)
   end
 end
+
+defmodule HttpParser do
+  def parse_request(request) do
+    request
+    |> HttpRequest.parse()
+  end
+end
+
+# POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 3\r\n\r\nHi!
