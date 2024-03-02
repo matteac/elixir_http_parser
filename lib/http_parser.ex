@@ -132,6 +132,7 @@ defmodule HttpParser do
     |> String.split(" ")
   end
 
+  @spec parse_headers(String.t()) :: [HttpHeader.t()]
   def parse_headers(head) do
     head
     |> String.split("\r\n")
